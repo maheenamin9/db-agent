@@ -31,6 +31,9 @@ class Settings(BaseSettings):
     max_repair_retries: int = 2
     row_limit: int = 1000
 
+    # Uploads
+    max_upload_mb: int = 50
+
     # Seed databases (used by the Postgres / MySQL connectors)
     postgres_dsn: str = "postgresql://postgres:postgres@localhost:5432/demo"
     mysql_host: str = "localhost"

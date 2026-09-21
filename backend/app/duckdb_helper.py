@@ -8,7 +8,7 @@ import pandas as pd
 from app.config import get_settings
 
 
-def _ident(name: str) -> str:
+def quote_ident(name: str) -> str:
     """Quote a table name so spaces and odd characters are safe in SQL."""
     return '"' + name.replace('"', '""') + '"'
 
@@ -32,7 +32,9 @@ class DuckDBHelper:
         with self._lock:
             self._con.register("_incoming", df)
             try:
-                self._con.execute(f"CREATE OR REPLACE TABLE {_ident(name)} AS SELECT * FROM _incoming")
+                self._con.execute(
+                    f"CREATE OR REPLACE TABLE {quote_ident(name)} AS SELECT * FROM _incoming"
+                )
             finally:
                 self._con.unregister("_incoming")
 
@@ -42,7 +44,7 @@ class DuckDBHelper:
             raise FileNotFoundError(path)
         with self._lock:
             self._con.execute(
-                f"CREATE OR REPLACE TABLE {_ident(name)} AS SELECT * FROM read_csv_auto(?)",
+                f"CREATE OR REPLACE TABLE {quote_ident(name)} AS SELECT * FROM read_csv_auto(?)",
                 [str(path)],
             )
 
