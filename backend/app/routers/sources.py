@@ -13,6 +13,7 @@ from app.connectors.csv_excel import (
     FileLoadError,
     get_csv_excel_connector,
 )
+from app.connectors.gsheets import GoogleSheetsConnector, SheetLoadError, get_gsheets_connector
 from app.connectors.registry import CONNECTOR_TYPES, Source, SourceRegistry, get_registry
 from app.duckdb_helper import DuckDBHelper, get_helper
 from app.routers.tables import TableOut
@@ -51,6 +52,11 @@ class ImportResponse(BaseModel):
 
 class UploadResponse(BaseModel):
     tables: list[TableOut]
+
+
+class GSheetsImportRequest(BaseModel):
+    spreadsheet_id: str = Field(description="The id from the sheet's URL, not the full URL")
+    name: str | None = None
 
 
 def _out(source: Source) -> SourceOut:
@@ -139,5 +145,21 @@ def upload(file: UploadFile, connector: CsvExcelConnector = Depends(get_csv_exce
             names = connector.load_file(dest, name=Path(filename).stem)
         except FileLoadError as e:
             raise HTTPException(status_code=422, detail=f"Could not load '{filename}': {e}")
+
+    return UploadResponse(tables=[TableOut(name=n, columns=connector.get_schema(n)) for n in names])
+
+
+@router.post("/gsheets", response_model=UploadResponse)
+def import_gsheets(
+    body: GSheetsImportRequest, connector: GoogleSheetsConnector = Depends(get_gsheets_connector)
+):
+    """Load every worksheet of a Google spreadsheet and register it as DuckDB table(s).
+
+    The spreadsheet must be shared with the service account's email as a Viewer.
+    """
+    try:
+        names = connector.load_spreadsheet(body.spreadsheet_id, name=body.name)
+    except SheetLoadError as e:
+        raise HTTPException(status_code=422, detail=f"Could not load spreadsheet: {e}")
 
     return UploadResponse(tables=[TableOut(name=n, columns=connector.get_schema(n)) for n in names])

@@ -34,6 +34,10 @@ class Settings(BaseSettings):
     # Uploads
     max_upload_mb: int = 50
 
+    # Google Sheets: path to a service account JSON key. The spreadsheet must be
+    # shared with that service account's email (Editor access is not needed, Viewer is enough).
+    google_service_account_file: str | None = None
+
     # CORS
     cors_origins: list[str] = ["http://localhost:3000"]
 

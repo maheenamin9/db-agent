@@ -8,8 +8,14 @@ services:
       SQL_MODEL: ${SQL_MODEL:-qwen2.5-coder:14b}
       EMBED_MODEL: ${EMBED_MODEL:-nomic-embed-text}
       QDRANT_URL: http://qdrant:6333
+      # GOOGLE_SERVICE_ACCOUNT_FILE_HOST (root .env, host path) is bind-mounted in below;
+      # this is the path the app sees *inside* the container. Empty when unset, which the
+      # app treats the same as "no service account configured".
+      GOOGLE_SERVICE_ACCOUNT_FILE: ${GOOGLE_SERVICE_ACCOUNT_FILE_HOST:+/run/secrets/google-service-account.json}
     volumes:
       - ./backend/data:/app/data
+      # /dev/null when unset: a harmless no-op mount, since Compose can't skip a volume entry conditionally.
+      - ${GOOGLE_SERVICE_ACCOUNT_FILE_HOST:-/dev/null}:/run/secrets/google-service-account.json:ro
     extra_hosts:
       - "host.docker.internal:host-gateway"
     depends_on:

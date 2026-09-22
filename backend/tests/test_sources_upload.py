@@ -6,7 +6,7 @@ from fastapi.testclient import TestClient
 
 from app.config import get_settings
 from app.connectors.csv_excel import CsvExcelConnector, get_csv_excel_connector
-from app.duckdb_helper import DuckDBHelper
+from app.duckdb_helper import DuckDBHelper, get_helper
 from app.main import app
 
 
@@ -15,6 +15,7 @@ def client():
     with DuckDBHelper(":memory:") as db:
         connector = CsvExcelConnector(db)
         app.dependency_overrides[get_csv_excel_connector] = lambda: connector
+        app.dependency_overrides[get_helper] = lambda: db
         yield TestClient(app)
     app.dependency_overrides.clear()
 
