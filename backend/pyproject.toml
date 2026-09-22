@@ -29,3 +29,4 @@ dev = [
 [tool.pytest.ini_options]
 pythonpath = ["."]
 testpaths = ["tests"]
+markers = ["integration: needs the seeded docker-compose Postgres/MySQL (skipped when unreachable)"]

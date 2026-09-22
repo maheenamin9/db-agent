@@ -34,14 +34,6 @@ class Settings(BaseSettings):
     # Uploads
     max_upload_mb: int = 50
 
-    # Seed databases (used by the Postgres / MySQL connectors)
-    postgres_dsn: str = "postgresql://postgres:postgres@localhost:5432/demo"
-    mysql_host: str = "localhost"
-    mysql_port: int = 3306
-    mysql_user: str = "root"
-    mysql_password: str = "mysql"
-    mysql_database: str = "demo"
-
     # CORS
     cors_origins: list[str] = ["http://localhost:3000"]
 

@@ -8,11 +8,6 @@ services:
       SQL_MODEL: ${SQL_MODEL:-qwen2.5-coder:14b}
       EMBED_MODEL: ${EMBED_MODEL:-nomic-embed-text}
       QDRANT_URL: http://qdrant:6333
-      POSTGRES_DSN: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres:5432/${POSTGRES_DB:-demo}
-      MYSQL_HOST: mysql
-      MYSQL_USER: root
-      MYSQL_PASSWORD: ${MYSQL_ROOT_PASSWORD:-mysql}
-      MYSQL_DATABASE: ${MYSQL_DATABASE:-demo}
     volumes:
       - ./backend/data:/app/data
     extra_hosts:
@@ -39,26 +34,46 @@ services:
     volumes:
       - qdrant_data:/qdrant/storage
 
+  # Seed database. POSTGRES_USER is the admin account used only by the init scripts;
+  # the agent connects as READONLY_USER (created by seed/postgres/02_readonly_user.sh).
+  # Init scripts run only when the volume is empty: `docker compose down -v` to re-seed.
   postgres:
-    image: postgres:16
+    image: postgres:16-alpine
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-postgres}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
       POSTGRES_DB: ${POSTGRES_DB:-demo}
+      READONLY_USER: ${READONLY_USER:-readonly}
+      READONLY_PASSWORD: ${READONLY_PASSWORD:-readonly}
     ports:
-      - "5432:5432"
+      - "${POSTGRES_PORT:-5433}:5432"  # 5433 on the host: a local Postgres often owns 5432
     volumes:
       - postgres_data:/var/lib/postgresql/data
+      - ./seed/postgres:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-demo}"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
 
+  # Same idea for MySQL: root is for seeding only, the agent uses READONLY_USER.
   mysql:
     image: mysql:8
     environment:
       MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-mysql}
       MYSQL_DATABASE: ${MYSQL_DATABASE:-demo}
+      READONLY_USER: ${READONLY_USER:-readonly}
+      READONLY_PASSWORD: ${READONLY_PASSWORD:-readonly}
     ports:
-      - "3306:3306"
+      - "${MYSQL_PORT:-3306}:3306"
     volumes:
       - mysql_data:/var/lib/mysql
+      - ./seed/mysql:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -uroot -p$$MYSQL_ROOT_PASSWORD --silent"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
 
 volumes:
   qdrant_data:
