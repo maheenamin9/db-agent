@@ -5,6 +5,7 @@ from app.duckdb_helper import DuckDBHelper, get_helper
 from app.semantics.relationship_suggest import Suggestion, suggest_relationships
 from app.semantics.schema import Cardinality, Relationship
 from app.semantics.store import read_semantics, write_semantics
+from app.semantics.validate import check_endpoint
 
 router = APIRouter(prefix="/relationships", tags=["relationships"])
 
@@ -19,13 +20,6 @@ class RelationshipInput(BaseModel):
 
 class SuggestRequest(BaseModel):
     tables: list[str] | None = None
-
-
-def _check_endpoint(db: DuckDBHelper, table: str, column: str) -> None:
-    if table not in db.list_tables():
-        raise HTTPException(status_code=422, detail=f"Unknown table '{table}'")
-    if column not in {c.name for c in db.describe(table)}:
-        raise HTTPException(status_code=422, detail=f"Unknown column '{table}.{column}'")
 
 
 @router.get("", response_model=list[Relationship])
@@ -54,8 +48,8 @@ def suggest(body: SuggestRequest | None = None, db: DuckDBHelper = Depends(get_h
 
 @router.post("", response_model=Relationship, status_code=201)
 def create_relationship(body: RelationshipInput, db: DuckDBHelper = Depends(get_helper)):
-    _check_endpoint(db, body.from_model, body.from_column)
-    _check_endpoint(db, body.to_model, body.to_column)
+    check_endpoint(db, body.from_model, body.from_column)
+    check_endpoint(db, body.to_model, body.to_column)
     semantics = read_semantics()
     relationship = Relationship(**body.model_dump())
     semantics.relationships.append(relationship)
@@ -67,8 +61,8 @@ def create_relationship(body: RelationshipInput, db: DuckDBHelper = Depends(get_
 def update_relationship(
     relationship_id: str, body: RelationshipInput, db: DuckDBHelper = Depends(get_helper)
 ):
-    _check_endpoint(db, body.from_model, body.from_column)
-    _check_endpoint(db, body.to_model, body.to_column)
+    check_endpoint(db, body.from_model, body.from_column)
+    check_endpoint(db, body.to_model, body.to_column)
     semantics = read_semantics()
     for i, existing in enumerate(semantics.relationships):
         if existing.id == relationship_id:
