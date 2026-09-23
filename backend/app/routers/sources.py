@@ -1,3 +1,4 @@
+import re
 import tempfile
 from pathlib import Path
 from typing import Any, Literal
@@ -54,8 +55,18 @@ class UploadResponse(BaseModel):
     tables: list[TableOut]
 
 
+_SHEET_URL_ID_RE = re.compile(r"/spreadsheets/d/([a-zA-Z0-9_-]+)")
+
+
+def extract_spreadsheet_id(value: str) -> str:
+    """Accept either a bare spreadsheet id or a full Sheets URL, since that's what
+    someone will actually paste into a browser form."""
+    match = _SHEET_URL_ID_RE.search(value)
+    return match.group(1) if match else value.strip()
+
+
 class GSheetsImportRequest(BaseModel):
-    spreadsheet_id: str = Field(description="The id from the sheet's URL, not the full URL")
+    spreadsheet_id: str = Field(description="The spreadsheet's id, or its full URL")
     name: str | None = None
 
 
@@ -158,7 +169,7 @@ def import_gsheets(
     The spreadsheet must be shared with the service account's email as a Viewer.
     """
     try:
-        names = connector.load_spreadsheet(body.spreadsheet_id, name=body.name)
+        names = connector.load_spreadsheet(extract_spreadsheet_id(body.spreadsheet_id), name=body.name)
     except SheetLoadError as e:
         raise HTTPException(status_code=422, detail=f"Could not load spreadsheet: {e}")
 

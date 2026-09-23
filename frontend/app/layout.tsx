@@ -17,7 +17,11 @@ const steps = [
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     <html lang="en">
-      <body className="font-sans">
+      {/* suppressHydrationWarning: browser extensions (password managers, Grammarly,
+          etc.) commonly inject attributes onto <body> before React hydrates, which
+          otherwise reads as a false-positive mismatch. This doesn't hide real
+          mismatches elsewhere in the tree. */}
+      <body className="font-sans" suppressHydrationWarning>
         <nav className="flex gap-4 border-b border-gray-200 p-4">
           {steps.map(([label, href]) => (
             <Link key={href} href={href}>
