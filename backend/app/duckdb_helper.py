@@ -6,6 +6,7 @@ import duckdb
 import pandas as pd
 
 from app.config import get_settings
+from app.connectors.base import ColumnInfo
 
 
 def quote_ident(name: str) -> str:
@@ -63,6 +64,14 @@ class DuckDBHelper:
         return self.query("SELECT table_name FROM information_schema.tables ORDER BY table_name")[
             "table_name"
         ].tolist()
+
+    def describe(self, table: str) -> list[ColumnInfo]:
+        """Column names/types/nullability for a table already in the warehouse."""
+        rows = self.query(f"DESCRIBE {quote_ident(table)}").to_dict("records")
+        return [
+            ColumnInfo(name=r["column_name"], type=r["column_type"], nullable=r["null"] == "YES")
+            for r in rows
+        ]
 
     def close(self) -> None:
         with self._lock:

@@ -5,7 +5,7 @@ from pathlib import Path
 import pandas as pd
 
 from app.connectors.base import ColumnInfo, Connector, TableNotFoundError
-from app.duckdb_helper import DuckDBHelper, get_helper, quote_ident
+from app.duckdb_helper import DuckDBHelper, get_helper
 
 SUPPORTED_SUFFIXES = {".csv", ".xlsx"}
 
@@ -76,11 +76,7 @@ class CsvExcelConnector(Connector):
     def get_schema(self, table: str) -> list[ColumnInfo]:
         if table not in self.list_tables():
             raise TableNotFoundError(table)
-        rows = self.db.query(f"DESCRIBE {quote_ident(table)}").to_dict("records")
-        return [
-            ColumnInfo(name=r["column_name"], type=r["column_type"], nullable=r["null"] == "YES")
-            for r in rows
-        ]
+        return self.db.describe(table)
 
     def run_sql(self, query: str) -> pd.DataFrame:
         return self.db.query(query)

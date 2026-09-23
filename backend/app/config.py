@@ -25,7 +25,6 @@ class Settings(BaseSettings):
     # Local state
     duckdb_path: Path = DATA_DIR / "warehouse.duckdb"
     semantics_path: Path = DATA_DIR / "semantics.yaml"
-    relationships_path: Path = DATA_DIR / "relationships.json"
 
     # Agent
     max_repair_retries: int = 2

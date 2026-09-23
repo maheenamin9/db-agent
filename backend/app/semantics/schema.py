@@ -1,4 +1,9 @@
+import uuid
+from typing import Literal
+
 from pydantic import BaseModel, Field
+
+Cardinality = Literal["one_to_one", "one_to_many", "many_to_one", "many_to_many"]
 
 
 class Column(BaseModel):
@@ -16,11 +21,12 @@ class Model(BaseModel):
 
 
 class Relationship(BaseModel):
+    id: str = Field(default_factory=lambda: uuid.uuid4().hex[:8])
     from_model: str
     from_column: str
     to_model: str
     to_column: str
-    cardinality: str = "many_to_one"
+    cardinality: Cardinality = "many_to_one"
 
 
 class Semantics(BaseModel):
