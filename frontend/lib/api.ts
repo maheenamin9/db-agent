@@ -10,6 +10,22 @@ export type ImportResponse = { imported: { name: string; rows: number }[] };
 export type UploadResponse = { tables: TableOut[] };
 export type Selection = { tables: string[] | null };
 
+export type Cardinality = "one_to_one" | "one_to_many" | "many_to_one" | "many_to_many";
+
+export type Column = { name: string; type: string | null; description: string };
+export type Model = { name: string; description: string; columns: Column[] };
+export type Relationship = {
+  id: string;
+  from_model: string;
+  from_column: string;
+  to_model: string;
+  to_column: string;
+  cardinality: Cardinality;
+};
+export type Suggestion = Omit<Relationship, "id"> & { confidence: number; reason: string };
+export type Semantics = { models: Model[]; relationships: Relationship[] };
+export type RelationshipInput = Omit<Relationship, "id">;
+
 export class ApiError extends Error {
   status: number;
   constructor(status: number, message: string) {
@@ -70,4 +86,28 @@ export const api = {
 
   selectTables: (tables: string[]) =>
     request<Selection>("/tables/select", { method: "POST", body: JSON.stringify({ tables }) }),
+
+  getSemantics: () => request<Semantics>("/semantics"),
+
+  putSemantics: (semantics: Semantics) =>
+    request<Semantics>("/semantics", { method: "PUT", body: JSON.stringify(semantics) }),
+
+  syncSemantics: () => request<Semantics>("/semantics/sync", { method: "POST" }),
+
+  listRelationships: () => request<Relationship[]>("/relationships"),
+
+  suggestRelationships: (tables?: string[]) =>
+    request<Suggestion[]>("/relationships/suggest", {
+      method: "POST",
+      body: JSON.stringify(tables ? { tables } : {}),
+    }),
+
+  createRelationship: (body: RelationshipInput) =>
+    request<Relationship>("/relationships", { method: "POST", body: JSON.stringify(body) }),
+
+  updateRelationship: (id: string, body: RelationshipInput) =>
+    request<Relationship>(`/relationships/${id}`, { method: "PUT", body: JSON.stringify(body) }),
+
+  deleteRelationship: (id: string) =>
+    request<void>(`/relationships/${id}`, { method: "DELETE" }),
 };
