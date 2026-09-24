@@ -32,6 +32,14 @@ export type DeployResponse = {
   columns: number;
   relationships: number;
 };
+export type Row = Record<string, unknown>;
+export type AskResponse = {
+  answer: string;
+  sql: string;
+  rows: Row[];
+  row_count: number;
+  error: string | null;
+};
 
 export class ApiError extends Error {
   status: number;
@@ -128,4 +136,9 @@ export const api = {
     request<void>(`/relationships/${id}`, { method: "DELETE" }),
 
   deploy: () => request<DeployResponse>("/deploy", { method: "POST" }),
+
+  // No client-side timeout: a local model can genuinely take minutes (observed
+  // range so far: ~1-15 minutes for one question). Let it run.
+  ask: (question: string) =>
+    request<AskResponse>("/ask", { method: "POST", body: JSON.stringify({ question }) }),
 };
