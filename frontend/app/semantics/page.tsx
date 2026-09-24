@@ -11,6 +11,7 @@ const buttonClass =
   "rounded bg-gray-900 px-4 py-1.5 text-sm font-medium text-white hover:bg-gray-700 disabled:opacity-50";
 const secondaryButtonClass =
   "rounded border border-gray-300 px-4 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50";
+const linkButtonClass = "text-sm text-blue-600 hover:underline disabled:opacity-50 disabled:no-underline";
 
 function errorMessage(e: unknown) {
   return e instanceof ApiError ? e.message : String(e);
@@ -23,6 +24,8 @@ export default function SemanticsPage() {
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [generating, setGenerating] = useState<Set<string>>(new Set());
+  const [generateErrors, setGenerateErrors] = useState<Record<string, string>>({});
 
   const dirty = semantics !== null && JSON.stringify(semantics) !== savedJson;
 
@@ -82,6 +85,48 @@ export default function SemanticsPage() {
     setSaved(false);
   };
 
+  // Fills only currently-empty fields with AI-generated text (the backend does the
+  // same filtering); anything already typed, including a description you just typed
+  // while this was in flight, is left alone. Nothing is saved until you hit Save.
+  const generateFor = async (modelName: string) => {
+    setGenerating((prev) => new Set(prev).add(modelName));
+    setGenerateErrors((prev) => {
+      const { [modelName]: _drop, ...rest } = prev;
+      return rest;
+    });
+    try {
+      const generated = await api.generateDescriptions(modelName);
+      setSemantics((s) =>
+        s
+          ? {
+              ...s,
+              models: s.models.map((m) =>
+                m.name !== modelName
+                  ? m
+                  : {
+                      ...m,
+                      description: m.description || generated.description,
+                      columns: m.columns.map((c) => {
+                        const match = generated.columns.find((gc) => gc.name === c.name);
+                        return c.description || !match ? c : { ...c, description: match.description };
+                      }),
+                    }
+              ),
+            }
+          : s
+      );
+      setSaved(false);
+    } catch (e) {
+      setGenerateErrors((prev) => ({ ...prev, [modelName]: errorMessage(e) }));
+    } finally {
+      setGenerating((prev) => {
+        const next = new Set(prev);
+        next.delete(modelName);
+        return next;
+      });
+    }
+  };
+
   const save = async () => {
     if (!semantics) return;
     setSaving(true);
@@ -137,7 +182,19 @@ export default function SemanticsPage() {
         semantics &&
         semantics.models.map((model) => (
           <section key={model.name} className="mb-6 rounded border border-gray-200 p-4">
-            <h2 className="font-semibold mb-1">{model.name}</h2>
+            <div className="flex items-center justify-between mb-1">
+              <h2 className="font-semibold">{model.name}</h2>
+              <button
+                className={linkButtonClass}
+                disabled={generating.has(model.name)}
+                onClick={() => generateFor(model.name)}
+              >
+                {generating.has(model.name) ? "Generating…" : "Generate AI description"}
+              </button>
+            </div>
+            {generateErrors[model.name] && (
+              <p className="mb-2 text-xs text-red-700">{generateErrors[model.name]}</p>
+            )}
             <input
               className={`${inputClass} mb-3`}
               placeholder="What does this table represent?"

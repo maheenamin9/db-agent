@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException
 
 from app.duckdb_helper import DuckDBHelper, get_helper
+from app.semantics.describe import ChatModel, DescribeError, generate_descriptions, get_chat_model
 from app.semantics.schema import Column, Model, Semantics
 from app.semantics.store import SemanticsLoadError, read_semantics, write_semantics
 from app.semantics.validate import check_endpoint
@@ -38,6 +39,31 @@ def put_semantics(semantics: Semantics, db: DuckDBHelper = Depends(get_helper)):
 
     write_semantics(semantics)
     return semantics
+
+
+@router.post("/generate/{table_name}", response_model=Model)
+def generate_model_descriptions(table_name: str, chat: ChatModel = Depends(get_chat_model)):
+    """Ask an LLM for a short description of this model and any of its columns that
+    are still blank. Never touches semantics.yaml — returns the model with the
+    generated text merged in, so the editor can show it for review before Save."""
+    semantics = _read_or_500()
+    model = next((m for m in semantics.models if m.name == table_name), None)
+    if model is None:
+        raise HTTPException(status_code=404, detail=f"Unknown model '{table_name}'")
+
+    try:
+        generated = generate_descriptions(model, chat)
+    except ConnectionError as e:
+        raise HTTPException(status_code=502, detail=f"Could not reach the LLM: {e}")
+    except DescribeError as e:
+        raise HTTPException(status_code=502, detail=str(e))
+
+    if generated["table"]:
+        model.description = generated["table"]
+    for column in model.columns:
+        if column.name in generated["columns"]:
+            column.description = generated["columns"][column.name]
+    return model
 
 
 @router.post("/sync", response_model=Semantics)

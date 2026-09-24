@@ -100,6 +100,9 @@ export const api = {
 
   syncSemantics: () => request<Semantics>("/semantics/sync", { method: "POST" }),
 
+  generateDescriptions: (tableName: string) =>
+    request<Model>(`/semantics/generate/${encodeURIComponent(tableName)}`, { method: "POST" }),
+
   listRelationships: () => request<Relationship[]>("/relationships"),
 
   suggestRelationships: (tables?: string[]) =>

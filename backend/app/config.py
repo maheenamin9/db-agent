@@ -17,6 +17,7 @@ class Settings(BaseSettings):
     ollama_host: str = "http://localhost:11434"
     sql_model: str = "qwen2.5-coder:14b"
     embed_model: str = "nomic-embed-text"
+    describe_model: str = "qwen3:8b"
 
     # Qdrant
     qdrant_url: str = "http://localhost:6333"
