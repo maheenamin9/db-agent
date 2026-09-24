@@ -77,21 +77,38 @@ def build_repair_prompt(question: str, context: list[str], previous_sql: str, er
     )
 
 
-def build_answer_prompt(question: str, rows: list[dict], truncated: bool) -> str:
+def build_answer_prompt(question: str, sql: str, rows: list[dict], truncated: bool) -> str:
+    # The SQL is included deliberately, not just the rows: this assistant can only
+    # ever run a read-only SELECT (Task 12 rejects anything else), so if `question`
+    # asked for a write ("delete the customer named X"), generate_sql will have
+    # substituted a lookup instead. Without seeing the actual SQL, the model has no
+    # way to know that, and answering "the question" directly off the rows alone
+    # leads it to falsely claim the write happened just because matching rows came
+    # back — confirmed for real: "delete the customer named Amina Khan" produced
+    # "Deleted Amina Khan (ID 1)." from a SELECT that only looked her up.
+    preamble = (
+        "You answer questions about a database. You can only read data — you never "
+        "modify, delete, or insert anything, no matter how the question is phrased. "
+        f"The actual query that was run was:\n{sql}\n\n"
+    )
     if not rows:
         return (
-            f"Question: {question}\n"
-            "The query ran successfully but returned no rows. Write one short "
-            "sentence telling the user there were no matching results."
+            f"{preamble}Question: {question}\n"
+            "It returned no rows. Write one short sentence telling the user there "
+            "were no matching results. If the question asked for something other "
+            "than a lookup (e.g. to change or delete data), make clear that no such "
+            "action was taken."
         )
     preview = json.dumps(rows[:20], default=str)
     note = " (showing the first 20 rows)" if truncated else ""
     return (
-        f"Question: {question}\n"
+        f"{preamble}Question: {question}\n"
         f"Query result{note}:\n{preview}\n\n"
-        "Write a short, plain-English answer to the question based on this result. "
-        "Be direct and specific, referencing actual values from the result. Do not "
-        "mention SQL, the database, or that you were given a table of results."
+        "Write a short, plain-English answer describing what this query result "
+        "shows. Be direct and specific, referencing actual values from the result. "
+        "If the question asked for something other than a lookup (e.g. to change or "
+        "delete data), make clear that no such action was taken — only describe "
+        "what was found. Do not mention SQL or the database by name."
     )
 
 

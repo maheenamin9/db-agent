@@ -58,24 +58,44 @@ def test_repair_prompt_includes_previous_sql_and_error():
 
 # build_answer_prompt
 def test_answer_prompt_empty_rows():
-    prompt = build_answer_prompt("How many orders?", [], truncated=False)
+    prompt = build_answer_prompt("How many orders?", "SELECT * FROM orders", [], truncated=False)
     assert "no rows" in prompt.lower() or "no matching results" in prompt.lower()
 
 
 def test_answer_prompt_includes_row_data():
-    prompt = build_answer_prompt("What's the total?", [{"total": 42}], truncated=False)
+    prompt = build_answer_prompt("What's the total?", "SELECT sum(x)", [{"total": 42}], truncated=False)
     assert "42" in prompt
     assert "What's the total?" in prompt
 
 
 def test_answer_prompt_notes_truncation():
-    prompt = build_answer_prompt("List orders", [{"id": 1}], truncated=True)
+    prompt = build_answer_prompt("List orders", "SELECT * FROM orders", [{"id": 1}], truncated=True)
     assert "first 20" in prompt.lower()
 
 
 def test_answer_prompt_does_not_mention_truncation_when_not_truncated():
-    prompt = build_answer_prompt("List orders", [{"id": 1}], truncated=False)
+    prompt = build_answer_prompt("List orders", "SELECT * FROM orders", [{"id": 1}], truncated=False)
     assert "first 20" not in prompt.lower()
+
+
+def test_answer_prompt_includes_the_actual_sql():
+    """Regression test: without the real SQL, the model can't tell a destructive
+    question was silently answered with a read-only lookup instead — confirmed for
+    real, "delete the customer named Amina Khan" produced "Deleted Amina Khan"
+    from a SELECT that only found her."""
+    prompt = build_answer_prompt(
+        "delete the customer named Amina Khan",
+        "SELECT * FROM customers WHERE name = 'Amina Khan'",
+        [{"id": 1, "name": "Amina Khan"}],
+        truncated=False,
+    )
+    assert "SELECT * FROM customers WHERE name = 'Amina Khan'" in prompt
+    assert "only read data" in prompt.lower() or "never modify" in prompt.lower()
+
+
+def test_answer_prompt_tells_model_not_to_claim_actions_it_did_not_take():
+    prompt = build_answer_prompt("delete x", "SELECT * FROM t", [{"id": 1}], truncated=False)
+    assert "no such action was taken" in prompt.lower()
 
 
 # build_failure_answer

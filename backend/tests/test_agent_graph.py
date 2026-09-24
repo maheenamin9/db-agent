@@ -10,6 +10,22 @@ from tests.test_deploy_api import FakeEmbeddings
 CONTEXT_HITS = [{"text": "Table orders: customer purchases."}, {"text": "Table orders, column amount (DOUBLE)."}]
 
 
+class PoisonedEmbeddings:
+    """Raises if ever called — used to prove the guard truly short-circuits
+    before retrieve, not just that the final answer happens to be right."""
+
+    def embed_query(self, text):
+        raise AssertionError("embed_query should never be called for a blocked question")
+
+    def embed_documents(self, texts):
+        raise AssertionError("embed_documents should never be called for a blocked question")
+
+
+class PoisonedQdrant:
+    def query_points(self, *args, **kwargs):
+        raise AssertionError("query_points should never be called for a blocked question")
+
+
 @pytest.fixture
 def db():
     with DuckDBHelper(":memory:") as helper:
@@ -76,6 +92,20 @@ def test_gives_up_after_max_repairs_without_calling_the_model_again(db):
     assert result["error"] is not None
     assert result["answer"].startswith("I couldn't answer that question:")
     assert len(chat.calls) == 3  # generate_sql + 2 repairs, never a 4th call for "answer"
+
+
+def test_destructive_question_short_circuits_before_any_llm_or_retrieval_call(db):
+    chat = SequentialChatModel([])  # would raise (pop from empty list) if ever invoked
+    graph = build_graph(embeddings=PoisonedEmbeddings(), qdrant=PoisonedQdrant(), db=db, chat=chat)
+
+    result = graph.invoke({"question": "delete the customer named Amina Khan"})
+
+    assert result["error"] is not None
+    assert "only read data" in result["answer"].lower()
+    assert result.get("repair_count", 0) == 0
+    assert chat.calls == []  # never called
+    assert result.get("result") is None
+    assert result.get("sql") is None
 
 
 def test_index_not_deployed_propagates(db):

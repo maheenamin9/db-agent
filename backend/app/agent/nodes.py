@@ -2,6 +2,7 @@ from qdrant_client import QdrantClient
 from qdrant_client.http.exceptions import UnexpectedResponse
 
 from app.agent.errors import IndexNotDeployedError
+from app.agent.guard import destructive_intent
 from app.agent.llm import (
     ChatModel,
     build_answer_prompt,
@@ -23,6 +24,15 @@ from app.indexing.qdrant_client import get_client
 # the real ones once at build time via functools.partial; tests pass fakes directly,
 # either calling a node function on its own or building a full graph with overrides
 # (see agent/graph.py's build_graph(**overrides)).
+
+
+def guard(state: AgentState) -> dict:
+    """Fast, pre-LLM check for an obviously destructive request (Task 12's
+    validate_sql remains the real enforcement regardless; this just avoids a slow
+    LLM round trip for the common, directly-phrased case). Sets `error` so the
+    existing failure path in `answer` reports it — no other node runs."""
+    reason = destructive_intent(state["question"])
+    return {"error": reason} if reason else {}
 
 
 def retrieve(
@@ -108,5 +118,5 @@ def answer(state: AgentState, *, chat: ChatModel | None = None) -> dict:
     chat = chat or get_sql_chat_model()
     rows = state.get("result") or []
     truncated = len(rows) > 20
-    prompt = build_answer_prompt(state["question"], rows, truncated)
+    prompt = build_answer_prompt(state["question"], state.get("sql", ""), rows, truncated)
     return {"answer": chat.invoke(prompt).content.strip()}

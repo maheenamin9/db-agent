@@ -9,6 +9,17 @@ from tests.test_deploy_api import FakeEmbeddings
 from tests.test_describe import FailingChatModel
 
 
+# guard
+def test_guard_blocks_a_destructive_question():
+    result = nodes.guard({"question": "delete the customer named Amina Khan"})
+    assert result["error"] is not None
+    assert "only read data" in result["error"].lower()
+
+
+def test_guard_passes_through_a_genuine_question():
+    assert nodes.guard({"question": "How many customers are there?"}) == {}
+
+
 # retrieve
 def test_retrieve_returns_hit_texts():
     qdrant = FakeQdrant(hits=[{"text": "Table orders: ..."}, {"text": "Table customers: ..."}])

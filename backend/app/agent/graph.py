@@ -22,6 +22,10 @@ def _after_check(state: AgentState) -> str:
     return "give_up"
 
 
+def _after_guard(state: AgentState) -> str:
+    return "blocked" if state.get("error") else "ok"
+
+
 def build_graph(
     *,
     embeddings: Embeddings | None = None,
@@ -38,6 +42,7 @@ def build_graph(
     chat = chat or get_sql_chat_model()  # shared across generate_sql/repair/answer
 
     g = StateGraph(AgentState)
+    g.add_node("guard", nodes.guard)
     g.add_node("retrieve", functools.partial(nodes.retrieve, embeddings=embeddings, qdrant=qdrant))
     g.add_node("generate_sql", functools.partial(nodes.generate_sql, chat=chat))
     g.add_node("validate", nodes.validate)
@@ -45,7 +50,12 @@ def build_graph(
     g.add_node("repair", functools.partial(nodes.repair, chat=chat))
     g.add_node("answer", functools.partial(nodes.answer, chat=chat))
 
-    g.add_edge(START, "retrieve")
+    g.add_edge(START, "guard")
+    # An obviously destructive question skips retrieve/generate_sql/validate/execute
+    # entirely and goes straight to answer — no embedding call, no LLM call, no
+    # Qdrant query. validate_sql is still what actually enforces
+    # read-only access; this only short-circuits the common, fast-to-detect case.
+    g.add_conditional_edges("guard", _after_guard, {"ok": "retrieve", "blocked": "answer"})
     g.add_edge("retrieve", "generate_sql")
     g.add_edge("generate_sql", "validate")
     g.add_conditional_edges(
