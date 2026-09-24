@@ -75,10 +75,11 @@ def validate(state: AgentState) -> dict:
 
 
 def execute(state: AgentState, *, db: DuckDBHelper | None = None) -> dict:
-    """Run the SQL on DuckDB; set `result` or `error`."""
+    """Run the SQL on DuckDB inside a read-only transaction (Task 12) and set
+    `result` or `error`."""
     db = db or get_helper()
     try:
-        df = db.query(state["sql"])
+        df = db.query_readonly(state["sql"])
     except Exception as e:
         return {"error": str(e)}
     return {"result": df.to_dict("records"), "error": None}

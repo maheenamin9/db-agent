@@ -60,6 +60,27 @@ class DuckDBHelper:
         with self._lock:
             return self._con.execute(sql).fetch_df()
 
+    def query_readonly(self, sql: str) -> pd.DataFrame:
+        """Run SQL inside a read-only transaction: DuckDB itself refuses any write
+        for its duration, so even if a mutating statement somehow slipped past
+        validation, it can't take effect. Used for agent-generated SQL (Task 12).
+
+        A second, separately-opened read-only connection to the same file isn't an
+        option here — DuckDB refuses to open one with a different mode than an
+        existing connection already has the file open with (confirmed directly);
+        a read-only transaction on this same connection is what's actually
+        available, and it's real: DuckDB raises a TransactionException on a write
+        attempted inside one.
+        """
+        with self._lock:
+            self._con.execute("BEGIN TRANSACTION READ ONLY")
+            try:
+                return self._con.execute(sql).fetch_df()
+            finally:
+                # Nothing was, or could have been, written — ROLLBACK is always
+                # the right way to close this out, success or failure.
+                self._con.execute("ROLLBACK")
+
     def drop_table(self, name: str) -> None:
         with self._lock:
             self._con.execute(f"DROP TABLE IF EXISTS {quote_ident(name)}")

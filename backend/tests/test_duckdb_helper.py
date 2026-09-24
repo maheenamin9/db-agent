@@ -82,6 +82,42 @@ def test_query_invalid_sql_raises(db):
         db.query("SELECT * FROM nowhere")
 
 
+# query_readonly
+def test_query_readonly_returns_rows(db):
+    db.register_dataframe("t", pd.DataFrame({"a": [1, 2, 3]}))
+    result = db.query_readonly("SELECT sum(a) AS s FROM t")
+    assert result["s"][0] == 6
+
+
+def test_query_readonly_blocks_a_write_even_though_validation_should_have_caught_it():
+    """Defense in depth: even if a mutating statement somehow reached execution,
+    DuckDB itself refuses it inside a read-only transaction."""
+    db_ = DuckDBHelper(":memory:")
+    db_.register_dataframe("t", pd.DataFrame({"a": [1]}))
+    with pytest.raises(Exception, match="(?i)read.only"):
+        db_.query_readonly("INSERT INTO t VALUES (2)")
+    # the attempted write really didn't happen
+    assert db_.query("SELECT count(*) AS n FROM t")["n"][0] == 1
+    db_.close()
+
+
+def test_query_readonly_leaves_connection_usable_after_a_failed_query(db):
+    """The ROLLBACK in the finally block must fire even when the query itself
+    errors, or the connection would be left in a broken transaction state."""
+    db.register_dataframe("t", pd.DataFrame({"a": [1]}))
+    with pytest.raises(Exception):
+        db.query_readonly("SELECT * FROM nowhere")
+    # connection still works normally afterwards
+    assert db.query_readonly("SELECT count(*) AS n FROM t")["n"][0] == 1
+
+
+def test_query_readonly_does_not_persist_any_state_between_calls(db):
+    db.register_dataframe("t", pd.DataFrame({"a": [1, 2]}))
+    first = db.query_readonly("SELECT count(*) AS n FROM t")["n"][0]
+    second = db.query_readonly("SELECT count(*) AS n FROM t")["n"][0]
+    assert first == second == 2
+
+
 # drop_table
 def test_drop_table(db):
     db.register_dataframe("t", pd.DataFrame({"a": [1]}))
