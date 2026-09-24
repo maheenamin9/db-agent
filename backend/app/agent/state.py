@@ -3,9 +3,9 @@ from typing import Any, TypedDict
 
 class AgentState(TypedDict, total=False):
     question: str
-    context: list[str]  # schema/semantic snippets retrieved from Qdrant
+    retrieved_context: list[str]  # schema/semantic snippets retrieved from Qdrant
     sql: str
+    result: list[dict[str, Any]] | None
     error: str | None
-    rows: list[dict[str, Any]]
-    retries: int
+    repair_count: int
     answer: str

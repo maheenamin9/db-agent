@@ -31,6 +31,9 @@ class FakeEmbeddings:
     def embed_documents(self, texts: list[str]) -> list[list[float]]:
         return [self._vector(t) for t in texts]
 
+    def embed_query(self, text: str) -> list[float]:
+        return self._vector(text)
+
     def _vector(self, text: str) -> list[float]:
         digest = hashlib.sha256(text.encode()).digest()
         return [b / 255 for b in digest[: self.size]]

@@ -15,9 +15,10 @@ class Settings(BaseSettings):
 
     # Ollama
     ollama_host: str = "http://localhost:11434"
-    sql_model: str = "qwen2.5-coder:14b"
+    sql_model: str = "qwen3:30b"
     embed_model: str = "nomic-embed-text"
     describe_model: str = "qwen3:8b"
+    retrieval_top_k: int = 8
 
     # Qdrant
     qdrant_url: str = "http://localhost:6333"
