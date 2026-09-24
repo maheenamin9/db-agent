@@ -10,6 +10,8 @@ from app.main import app
 @pytest.fixture(autouse=True)
 def isolate_semantics(tmp_path, monkeypatch):
     monkeypatch.setattr(get_settings(), "semantics_path", tmp_path / "semantics.yaml")
+    # sync now consults the saved table selection; never let that be the real one.
+    monkeypatch.setattr(get_settings(), "table_selection_path", tmp_path / "table_selection.json")
 
 
 @pytest.fixture
@@ -172,3 +174,30 @@ def test_sync_ignores_tables_dropped_from_duckdb(client):
     res = client.post("/semantics/sync")
     names = {m["name"] for m in res.json()["models"]}
     assert {"customers", "orders"} <= names
+
+
+def test_sync_skips_tables_excluded_by_the_selection(client):
+    client.post("/tables/select", json={"tables": ["customers"]})
+    res = client.post("/semantics/sync")
+    assert {m["name"] for m in res.json()["models"]} == {"customers"}
+
+
+def test_sync_prunes_a_model_that_is_deselected_after_being_synced(client):
+    """Distinct from test_sync_ignores_tables_dropped_from_duckdb: a table that's
+    still physically in DuckDB but excluded by an explicit selection is a
+    deliberate choice, not a transient absence — sync prunes it."""
+    client.post("/semantics/sync")
+    assert {"customers", "orders"} <= {m["name"] for m in client.get("/semantics").json()["models"]}
+
+    client.post("/tables/select", json={"tables": ["customers"]})
+    res = client.post("/semantics/sync")
+
+    assert {m["name"] for m in res.json()["models"]} == {"customers"}
+
+
+def test_sync_prunes_relationships_referencing_a_deselected_table(client):
+    client.put("/semantics", json=VALID_BODY)  # relationship: orders.customer_id -> customers.id
+    client.post("/tables/select", json={"tables": ["orders"]})  # excludes customers
+
+    res = client.post("/semantics/sync")
+    assert res.json()["relationships"] == []

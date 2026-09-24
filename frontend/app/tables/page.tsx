@@ -122,6 +122,7 @@ function ProjectTables() {
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [deleting, setDeleting] = useState<string | null>(null);
 
   const refresh = () => {
     setError(null);
@@ -159,6 +160,20 @@ function ProjectTables() {
     }
   };
 
+  const remove = async (name: string) => {
+    if (!confirm(`Delete "${name}"? This drops it from the warehouse and can't be undone.`)) return;
+    setDeleting(name);
+    setError(null);
+    try {
+      await api.deleteTable(name);
+      refresh();
+    } catch (e) {
+      setError(errorMessage(e));
+    } finally {
+      setDeleting(null);
+    }
+  };
+
   return (
     <section>
       <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-2">
@@ -166,7 +181,7 @@ function ProjectTables() {
       </h2>
       <p className="text-xs text-gray-500 mb-2">
         This is what gets described in Semantics and indexed in Deploy — uncheck anything that
-        shouldn&rsquo;t be.
+        shouldn&rsquo;t be, or delete a table entirely if you don&rsquo;t need it at all.
       </p>
       {error && <ErrorBox message={error} />}
       {!tables && !error && <p className="text-sm text-gray-500">Loading…</p>}
@@ -179,16 +194,25 @@ function ProjectTables() {
         <>
           <ul className="divide-y divide-gray-200 border border-gray-200 rounded mb-3">
             {tables.map((t) => (
-              <li key={t.name} className="px-3 py-2 text-sm">
-                <label className="flex items-center gap-2">
-                  <input
-                    type="checkbox"
-                    checked={checked.has(t.name)}
-                    onChange={() => toggle(t.name)}
-                  />
-                  <span className="font-medium">{t.name}</span>
-                </label>
-                <SchemaPreview table={t} />
+              <li key={t.name} className="flex items-start justify-between px-3 py-2 text-sm">
+                <div>
+                  <label className="flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      checked={checked.has(t.name)}
+                      onChange={() => toggle(t.name)}
+                    />
+                    <span className="font-medium">{t.name}</span>
+                  </label>
+                  <SchemaPreview table={t} />
+                </div>
+                <button
+                  className="text-sm text-red-600 hover:underline disabled:opacity-50"
+                  disabled={deleting === t.name}
+                  onClick={() => remove(t.name)}
+                >
+                  {deleting === t.name ? "Deleting…" : "Delete"}
+                </button>
               </li>
             ))}
           </ul>

@@ -60,6 +60,10 @@ class DuckDBHelper:
         with self._lock:
             return self._con.execute(sql).fetch_df()
 
+    def drop_table(self, name: str) -> None:
+        with self._lock:
+            self._con.execute(f"DROP TABLE IF EXISTS {quote_ident(name)}")
+
     def list_tables(self) -> list[str]:
         return self.query("SELECT table_name FROM information_schema.tables ORDER BY table_name")[
             "table_name"

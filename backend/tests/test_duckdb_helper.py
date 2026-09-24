@@ -82,6 +82,18 @@ def test_query_invalid_sql_raises(db):
         db.query("SELECT * FROM nowhere")
 
 
+# drop_table
+def test_drop_table(db):
+    db.register_dataframe("t", pd.DataFrame({"a": [1]}))
+    db.drop_table("t")
+    assert db.list_tables() == []
+
+
+def test_drop_missing_table_is_a_no_op(db):
+    db.drop_table("nope")  # doesn't raise
+    assert db.list_tables() == []
+
+
 # persistence
 def test_tables_survive_restart(tmp_path):
     path = tmp_path / "warehouse.duckdb"

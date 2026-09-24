@@ -1,3 +1,5 @@
+from dataclasses import dataclass
+
 import yaml
 from pydantic import ValidationError
 
@@ -37,3 +39,35 @@ def write_semantics(semantics: Semantics) -> None:
     tmp = path.with_suffix(path.suffix + ".tmp")
     tmp.write_text(yaml.safe_dump(semantics.model_dump(), sort_keys=False))
     tmp.replace(path)
+
+
+@dataclass
+class PruneResult:
+    models_removed: int
+    relationships_removed: int
+
+
+def remove_tables(tables: set[str]) -> PruneResult:
+    """Remove any Model, and any Relationship referencing it, for these tables.
+
+    For a table that's being deliberately excluded (deleted, or unselected from the
+    project) — not for a table that's just momentarily absent from DuckDB, which
+    sync's own logic leaves alone on purpose.
+    """
+    if not tables:
+        return PruneResult(0, 0)
+
+    semantics = read_semantics()
+    kept_models = [m for m in semantics.models if m.name not in tables]
+    kept_relationships = [
+        r for r in semantics.relationships if r.from_model not in tables and r.to_model not in tables
+    ]
+    result = PruneResult(
+        models_removed=len(semantics.models) - len(kept_models),
+        relationships_removed=len(semantics.relationships) - len(kept_relationships),
+    )
+    if result.models_removed or result.relationships_removed:
+        semantics.models = kept_models
+        semantics.relationships = kept_relationships
+        write_semantics(semantics)
+    return result

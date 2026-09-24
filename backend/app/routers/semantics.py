@@ -4,6 +4,7 @@ from app.duckdb_helper import DuckDBHelper, get_helper
 from app.semantics.schema import Column, Model, Semantics
 from app.semantics.store import SemanticsLoadError, read_semantics, write_semantics
 from app.semantics.validate import check_endpoint
+from app.table_selection import read_selection
 
 router = APIRouter(prefix="/semantics", tags=["semantics"])
 
@@ -41,17 +42,26 @@ def put_semantics(semantics: Semantics, db: DuckDBHelper = Depends(get_helper)):
 
 @router.post("/sync", response_model=Semantics)
 def sync_semantics(db: DuckDBHelper = Depends(get_helper)):
-    """Add a Model (with its real columns) for every DuckDB table not already
-    described, and add/refresh columns on models that already exist.
+    """Add a Model (with its real columns) for every *selected* DuckDB table not
+    already described, and add/refresh columns on models that already exist.
 
-    Structure only — table and column names and types, not prose. Never removes or
-    overwrites a description someone already wrote; this is meant to give the
-    Semantics editor (Task 9) something real to start from instead of a blank page.
+    Structure only — table and column names and types, not prose. Never overwrites
+    a description someone already wrote; this is meant to give the Semantics editor
+    (Task 9) something real to start from instead of a blank page.
+
+    Respects the Tables page's selection (Task 8): a table excluded there is pruned
+    out here too, even if it was already described by an earlier sync — that's a
+    deliberate exclusion, unlike a table that's simply absent from DuckDB right now
+    (a disconnected source), which is left untouched below.
     """
     semantics = _read_or_500()
+    selection = read_selection().tables  # None = every table in the warehouse is in scope
+    existing_tables = set(db.list_tables())
     by_name = {model.name: model for model in semantics.models}
 
-    for table in db.list_tables():
+    for table in existing_tables:
+        if selection is not None and table not in selection:
+            continue
         real_columns = db.describe(table)
         if table not in by_name:
             semantics.models.append(
@@ -69,6 +79,15 @@ def sync_semantics(db: DuckDBHelper = Depends(get_helper)):
                 known[c.name].type = c.type  # types aren't hand-authored; keep them accurate
             else:
                 model.columns.append(Column(name=c.name, type=c.type))
+
+    if selection is not None:
+        excluded = existing_tables - set(selection)
+        semantics.models = [m for m in semantics.models if m.name not in excluded]
+        semantics.relationships = [
+            r
+            for r in semantics.relationships
+            if r.from_model not in excluded and r.to_model not in excluded
+        ]
 
     write_semantics(semantics)
     return semantics

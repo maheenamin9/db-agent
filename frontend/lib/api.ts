@@ -87,6 +87,12 @@ export const api = {
   selectTables: (tables: string[]) =>
     request<Selection>("/tables/select", { method: "POST", body: JSON.stringify({ tables }) }),
 
+  deleteTable: (name: string) =>
+    request<{ table: string; model_removed: boolean; relationships_removed: number }>(
+      `/tables/${encodeURIComponent(name)}`,
+      { method: "DELETE" }
+    ),
+
   getSemantics: () => request<Semantics>("/semantics"),
 
   putSemantics: (semantics: Semantics) =>
