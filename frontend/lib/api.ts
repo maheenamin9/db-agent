@@ -25,6 +25,13 @@ export type Relationship = {
 export type Suggestion = Omit<Relationship, "id"> & { confidence: number; reason: string };
 export type Semantics = { models: Model[]; relationships: Relationship[] };
 export type RelationshipInput = Omit<Relationship, "id">;
+export type DeployResponse = {
+  collection: string;
+  points: number;
+  models: number;
+  columns: number;
+  relationships: number;
+};
 
 export class ApiError extends Error {
   status: number;
@@ -119,4 +126,6 @@ export const api = {
 
   deleteRelationship: (id: string) =>
     request<void>(`/relationships/${id}`, { method: "DELETE" }),
+
+  deploy: () => request<DeployResponse>("/deploy", { method: "POST" }),
 };
