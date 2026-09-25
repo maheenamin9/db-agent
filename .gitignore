@@ -14,6 +14,7 @@ id_rsa
 id_ed25519
 *.duckdb
 *.duckdb.wal
+*.txt
 
 # OS/editor cruft
 .DS_Store
