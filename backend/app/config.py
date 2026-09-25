@@ -5,13 +5,11 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 BACKEND_DIR = Path(__file__).resolve().parent.parent
 DATA_DIR = BACKEND_DIR / "data"
+ROOT_ENV_FILE = BACKEND_DIR.parent / ".env"
 
 
 class Settings(BaseSettings):
-    model_config = SettingsConfigDict(
-        env_file=(BACKEND_DIR.parent / ".env", BACKEND_DIR / ".env"),
-        extra="ignore",
-    )
+    model_config = SettingsConfigDict(env_file=ROOT_ENV_FILE, extra="ignore")
 
     # Ollama
     ollama_host: str = "http://localhost:11434"
