@@ -6,31 +6,20 @@ itself; the caller decides what to keep.
 
 import json
 import re
-from typing import Protocol
-
-from langchain_ollama import ChatOllama
 
 from app.config import get_settings
+from app.llm_provider import ChatMessage, ChatModel, build_chat_model
 from app.semantics.schema import Model
+
+__all__ = ["ChatMessage", "ChatModel"]  # re-exported: this used to define them itself
 
 
 class DescribeError(ValueError):
     """The model's response couldn't be used (bad JSON, missing fields, etc.)."""
 
 
-class ChatMessage(Protocol):
-    content: str
-
-
-class ChatModel(Protocol):
-    """What this module needs — matches ChatOllama and any test double."""
-
-    def invoke(self, prompt: str) -> ChatMessage: ...
-
-
 def get_chat_model() -> ChatModel:
-    settings = get_settings()
-    return ChatOllama(model=settings.describe_model, base_url=settings.ollama_host, temperature=0.3)
+    return build_chat_model(get_settings().describe_model, temperature=0.3)
 
 
 def _build_prompt(model: Model, column_names: list[str]) -> str:

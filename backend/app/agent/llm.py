@@ -5,26 +5,15 @@ split as app/semantics/describe.py.
 
 import json
 import re
-from typing import Protocol
-
-from langchain_ollama import ChatOllama
 
 from app.config import get_settings
+from app.llm_provider import ChatMessage, ChatModel, build_chat_model
 
-
-class ChatMessage(Protocol):
-    content: str
-
-
-class ChatModel(Protocol):
-    """What this module needs — matches ChatOllama and any test double."""
-
-    def invoke(self, prompt: str) -> ChatMessage: ...
+__all__ = ["ChatMessage", "ChatModel"]  # re-exported: this used to define them itself
 
 
 def get_sql_chat_model() -> ChatModel:
-    settings = get_settings()
-    return ChatOllama(model=settings.sql_model, base_url=settings.ollama_host, temperature=0.1)
+    return build_chat_model(get_settings().sql_model, temperature=0.1)
 
 
 # Primes a small/local model on the dialect (DuckDB), the expected output format
