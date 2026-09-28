@@ -38,24 +38,33 @@ skip the "live" step entirely, since there's nothing to query until they're load
 
 ### Models
 
-Three separate local models, each picked for what it actually needs to do — there's
-no single "the model" here:
+Two backends are supported, selected by `LLM_PROVIDER` (default `ollama`):
 
-| Purpose | Setting | Default | Why this one |
-|---|---|---|---|
-| Embeddings (semantic search) | `EMBED_MODEL` | `nomic-embed-text` | Small (137M params), purpose-built for embeddings rather than chat, 768-dimensional output |
-| SQL generation, repair, and answer summarization | `SQL_MODEL` | `qwen3:30b` | Runs 1-3+ times per question (initial attempt plus up to 2 repairs, plus the final answer), so it needs to be capable enough to get DuckDB SQL right without being so large that every question takes forever |
-| One-off table/column description generation | `DESCRIBE_MODEL` | `qwen3:8b` | A much simpler, less latency-sensitive job (one short sentence per field), so a faster/smaller model is the better trade-off here |
+- **`ollama`** — runs models locally (or on any reachable host). Good for privacy
+  and offline use; latency depends on the machine running Ollama.
+- **`groq`** — routes chat calls to [Groq's API](https://console.groq.com/). Much
+  faster inference than a local GPU for most models; requires `GROQ_API_KEY` to be
+  set in `.env` and Groq-compatible model ids in `SQL_MODEL`/`DESCRIBE_MODEL` (e.g.
+  `llama-3.3-70b-versatile`).
 
-All three are reached through `OLLAMA_HOST`, which can point at a model running on
-this machine or anywhere else reachable on the network — nothing here assumes
-Ollama is local.
+Embeddings always stay on Ollama regardless of `LLM_PROVIDER` — Groq has no
+embeddings API, so `EMBED_MODEL` and `OLLAMA_HOST` must always be configured.
 
-**A real caveat, not a footnote**: local-model latency for a single question has
+Three separate models, each picked for what it actually needs to do — there's no
+single "the model" here:
+
+| Purpose | Setting | Default (Ollama) | Groq equivalent | Why this one |
+|---|---|---|---|---|
+| Embeddings (semantic search) | `EMBED_MODEL` | `nomic-embed-text` | *(always Ollama)* | Small (137M params), purpose-built for embeddings rather than chat, 768-dimensional output |
+| SQL generation, repair, and answer summarization | `SQL_MODEL` | `qwen3:30b` | `llama-3.3-70b-versatile` | Runs 1-3+ times per question (initial attempt plus up to 2 repairs, plus the final answer), so it needs to be capable enough to get DuckDB SQL right |
+| One-off table/column description generation | `DESCRIBE_MODEL` | `qwen3:8b` | `llama-3.1-8b-instant` | A simpler, less latency-sensitive job (one short sentence per field), so a faster/smaller model is the better trade-off |
+
+**A real caveat, not a footnote**: with Ollama, latency for a single question has
 been observed anywhere from under a minute to around fifteen minutes, depending on
-the model and apparent load on wherever Ollama is running. The UI reflects this
-with a live elapsed-time counter instead of a plain spinner, and there's no
-artificial timeout on the request — it waits as long as it takes.
+the model and apparent load on wherever Ollama is running. Groq is significantly
+faster in practice. The UI reflects variable latency with a live elapsed-time
+counter instead of a plain spinner, and there's no artificial timeout on the
+request — it waits as long as it takes.
 
 ## How a question actually gets answered
 
