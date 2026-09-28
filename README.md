@@ -74,29 +74,38 @@ while `repair_count < 2`; past that, a failure also goes straight to `answer`,
 which reports it instead of trying again. The numbered steps below are the exact
 logic; the diagram above is just the gist.
 
-1. **guard** — a fast, deterministic check (no LLM call) for a question that's
-   obviously asking to *change* data rather than read it ("delete the customer
-   named X"). This only catches the common, directly-phrased case, and it's a
-   latency optimization, not the actual safety mechanism — that's step 4.
-2. **retrieve** — embeds the question and searches Qdrant for the most relevant
-   pieces of your semantic description (see [Semantic search](#semantic-search-what-gets-embedded) below).
-3. **generate_sql** — asks the SQL model for DuckDB SQL, given the retrieved
-   context and two few-shot examples.
-4. **validate** — parses the SQL with [`sqlglot`](https://github.com/tobymao/sqlglot)
-   and only allows a single `SELECT` (or `WITH ... SELECT`) statement through — an
-   allowlist, not a keyword blocklist, so it also rejects things a blocklist would
-   miss (`ATTACH`, `COPY`, `PRAGMA`, `SET`, ...), not just the obvious `INSERT`/`UPDATE`/`DELETE`/`DROP`.
-   A missing `LIMIT` gets one added; an absurdly large explicit one is rejected.
-5. **execute** — runs the query inside a DuckDB read-only transaction, so even a
-   statement that somehow got past validation still couldn't write anything.
-6. **repair** — on failure, feeds the exact error and the failed SQL back to the
-   model and tries again, up to twice (`MAX_REPAIR_RETRIES`).
-7. **answer** — summarizes the result rows in plain English. On failure, this is a
-   fixed message with no further LLM call, so a broken loop can't also fail to
-   explain itself. Answer generation is grounded in the *real, executed* SQL, not
-   just the original question — otherwise, for a question like "delete customer X"
-   that gets silently converted into a lookup, the model has no way to know a
-   write didn't happen and can end up claiming it did.
+1. **guard** — *technique: leading-verb regex heuristic (no LLM call).* Strips
+   common filler phrases ("please", "can you", …) and checks whether the first real
+   word is a known destructive verb (`delete`, `update`, `drop`, …). Only flags
+   commands that *lead* with that verb, so questions like "Which orders were deleted
+   last month?" pass through unblocked. Latency optimization only — that's step 4.
+2. **retrieve** — *technique: dense vector search (cosine similarity) over Qdrant.*
+   Embeds the question with the embedding model and returns the top-`RETRIEVAL_TOP_K`
+   (default 8) chunks — one chunk per table, column, or relationship — by cosine
+   similarity. See [Semantic search](#semantic-search-what-gets-embedded) below.
+3. **generate_sql** — *technique: few-shot prompting with retrieved schema context.*
+   Builds a prompt from the question, the retrieved chunks, and two hard-coded
+   few-shot examples, then asks the SQL model to emit DuckDB SQL wrapped in a
+   fenced code block. `extract_sql` pulls the first such block from the response.
+4. **validate** — *technique: AST allowlist via `sqlglot` (not a keyword blocklist).*
+   Parses the SQL and checks that exactly one statement exists and that its top-level
+   node is a `Select`. Because CTEs (`WITH … SELECT`) parse as `Select` nodes too,
+   no separate case is needed. This rejects anything that isn't a `SELECT` —
+   including `ATTACH`, `COPY`, `PRAGMA`, `SET`, and other statements a keyword regex
+   would miss — and caps or adds a `LIMIT` clause.
+5. **execute** — *technique: DuckDB read-only transaction.* Runs the validated SQL
+   inside a read-only connection so even a statement that somehow slipped past
+   validation still cannot write anything. Errors are caught and returned as `error`
+   for the repair loop.
+6. **repair** — *technique: error-grounded re-prompting with the failed SQL.*
+   Feeds the original question, retrieved context, the failed SQL, and the exact
+   error message back to the SQL model and asks it to produce a corrected query.
+   Runs at most twice (`MAX_REPAIR_RETRIES`) before the loop gives up.
+7. **answer** — *technique: grounded summarization (success) or fixed template
+   (failure).* On success, prompts the model with the *real, executed* SQL and the
+   result rows so it cannot claim a write happened when only a read did. On failure,
+   returns a fixed message string with no further LLM call, ensuring a broken loop
+   can always explain itself.
 
 ### Semantic search: what gets embedded
 
